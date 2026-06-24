@@ -81,8 +81,8 @@ function applyGlitchMask(layer, layerIn, layerOut, frameDur, cfg) {
     var t = layerIn;
     while (t <= layerOut + frameDur * 0.01) {
 
-        var cx = baseCX + (Math.random() - 0.5) * w * 0.2;
-        var cy = baseCY + (Math.random() - 0.5) * h * 0.2;
+        var cx = baseCX + (Math.random() - 0.5) * w * 0.06;
+        var cy = baseCY + (Math.random() - 0.5) * h * 0.06;
 
         var shape = new Shape();
         shape.vertices = [
