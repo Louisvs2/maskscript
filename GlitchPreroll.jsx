@@ -113,7 +113,7 @@ function applyGlitchMask(layer, layerIn, layerOut, frameDur, cfg) {
 
         pathProp.setValueAtTime(t, shape);
 
-        t += (Math.random() < 0.5 ? 1 : 2) * frameDur;
+        t += (2 + Math.floor(Math.random() * 3)) * frameDur; // alle 2–4 Frames
     }
 
     // Alle Keyframes auf HOLD  →  harte Sprünge, keine Interpolation
