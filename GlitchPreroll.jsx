@@ -84,12 +84,17 @@ function applyGlitchMask(layer, layerIn, layerOut, frameDur, cfg) {
         var cx = baseCX + (Math.random() - 0.5) * w * 0.06;
         var cy = baseCY + (Math.random() - 0.5) * h * 0.06;
 
+        // Zufällige Größe pro Keyframe: zwischen 50% und 150% der Basis-Maske
+        var randScale = 0.5 + Math.random();
+        var rW = maskW * randScale;
+        var rH = maskH * randScale;
+
         var shape = new Shape();
         shape.vertices = [
-            [cx - maskW/2, cy - maskH/2],
-            [cx + maskW/2, cy - maskH/2],
-            [cx + maskW/2, cy + maskH/2],
-            [cx - maskW/2, cy + maskH/2]
+            [cx - rW/2, cy - rH/2],
+            [cx + rW/2, cy - rH/2],
+            [cx + rW/2, cy + rH/2],
+            [cx - rW/2, cy + rH/2]
         ];
         shape.inTangents  = [[0,0],[0,0],[0,0],[0,0]];
         shape.outTangents = [[0,0],[0,0],[0,0],[0,0]];
