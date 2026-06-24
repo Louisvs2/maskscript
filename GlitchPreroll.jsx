@@ -23,18 +23,17 @@
     }
 
     // ── project values ────────────────────────────────────────────────────────
-    var fps           = comp.frameRate;
-    var fd            = 1 / fps;
-    var X             = orig.inPoint;           // comp time where original starts
-    var W             = comp.width;
-    var H             = comp.height;
-    var SF            = orig.stretch / 100;     // stretch factor (neg = reversed)
-    var origStartTime = orig.startTime;
+    var fps = comp.frameRate;
+    var fd  = 1 / fps;
+    var X   = orig.inPoint;     // comp time where original clip starts
+    var W   = comp.width;
+    var H   = comp.height;
+    var SF  = orig.stretch / 100;
 
     // Source time visible at comp time X in the original layer
     var srcAtX = orig.timeRemapEnabled
         ? orig.timeRemap.valueAtTime(X, false)
-        : (X - origStartTime) / SF;
+        : (X - orig.startTime) / SF;
 
     // ── mask geometry (~10 % of frame area) ──────────────────────────────────
     var maskArea = 0.10 * W * H;
@@ -47,46 +46,64 @@
     var nFramesList = [10, 7, 4];
 
     for (var i = 0; i < nFramesList.length; i++) {
-        var nF    = nFramesList[i];
-        var dupIn = X - nF * fd;   // preroll starts here
-        var dupOut = X;            // preroll ends exactly at original inPoint
+        var nF      = nFramesList[i];
+        var wantIn  = X - nF * fd;          // desired composition inPoint
+        var dupIn   = Math.max(0, wantIn);  // clamped to comp start
+        var dupOut  = X;
 
-        // 1. Duplicate (lands directly above original, same timing as orig)
+        // 1. Duplicate (same timing as original: inPoint=X, outPoint=orig.outPoint)
         var dup = orig.duplicate();
 
-        // 2. Adjust inPoint / outPoint BEFORE touching Time Remapping.
-        //    IMPORTANT: inPoint must be set first.
-        //    If outPoint were set to X while inPoint is still X, the layer
-        //    would momentarily have zero length and AE behaves unpredictably.
-        dup.inPoint  = dupIn;   // extend backward  (safe: dupIn < current outPoint)
-        dup.outPoint = dupOut;  // trim to X        (safe: dupOut <= current outPoint)
-
-        // 3. Enable Time Remapping NOW (inPoint/outPoint are already correct).
-        //    AE auto-creates two keyframes:
-        //      key 1  at dupIn  with value = source-time at dupIn
-        //      key 2  at dupOut (= X)  with value = source-time at dupOut
+        // 2. Enable Time Remapping FIRST.
+        //    This must happen before any inPoint/outPoint manipulation because:
+        //    – without TR, AE clamps inPoint to the source's natural start
+        //    – enabling TR can also reset inPoint to 0 in some builds, which
+        //      is fine here since we fix it in step 5.
         dup.timeRemapEnabled = true;
+        var tr = dup.property("ADBE Time Remapping");
 
-        // Always re-fetch the property ref after structural changes.
-        var tr     = dup.property("ADBE Time Remapping");
-        var k1t    = tr.keyTime(1);              // should be dupIn
-        var k2t    = tr.keyTime(tr.numKeys);     // should be X (or X + 1 frame)
-
-        // Source time we want to show at the start of the preroll
+        // 3. Calculate the source time we want at dupIn.
+        //    Formula: src(t) = srcAtX + (t – X) / SF
         var srcAtDupIn = srcAtX + (dupIn - X) / SF;
+        // Clamp to 0 if source doesn't reach that far back (freeze first frame).
+        var startSrc = (SF > 0 && srcAtDupIn < 0) ? 0 : srcAtDupIn;
 
+        // 4. Write time-remap keyframes.
+        //    After enabling TR, the layer's visible range is determined by the
+        //    existing auto-generated keys (at the original inPoint and outPoint).
+        //    We overwrite / add values at exactly dupIn and X.
+        //    Both times must lie within the layer's CURRENT in/out range.
+        //
+        //    Current state after step 2 (worst case):
+        //      inPoint might be 0, outPoint might be orig.outPoint
+        //      ⇒  dupIn ≥ 0  and  X ≤ orig.outPoint  → both within range ✓
+        tr.setValueAtTime(dupIn, startSrc);
+        tr.setValueAtTime(X,     srcAtX);
+
+        // If we froze, make the first keyframe a hard HOLD.
         if (SF > 0 && srcAtDupIn < 0) {
-            // Source exhausted: freeze on frame 0 and ramp to srcAtX
-            tr.setValueAtTime(k1t, 0);
-            tr.setInterpolationTypeAtKey(1, KeyframeInterpolationType.HOLD);
-            tr.setValueAtTime(k2t, srcAtX);
-        } else {
-            // Normal case: show source frames leading up to X
-            tr.setValueAtTime(k1t, srcAtDupIn);
-            tr.setValueAtTime(k2t, srcAtX);
+            for (var k = 1; k <= tr.numKeys; k++) {
+                if (Math.abs(tr.keyTime(k) - dupIn) < fd * 0.1) {
+                    tr.setInterpolationTypeAtKey(k, KeyframeInterpolationType.HOLD);
+                    break;
+                }
+            }
         }
 
-        // 4. Animated glitch mask
+        // Remove any auto-generated keys that are NOT at dupIn or X.
+        for (var k = tr.numKeys; k >= 1; k--) {
+            var kt = tr.keyTime(k);
+            if (Math.abs(kt - dupIn) > fd * 0.1 && Math.abs(kt - X) > fd * 0.1) {
+                tr.removeKey(k);
+            }
+        }
+
+        // 5. NOW set inPoint and outPoint.
+        //    TR is active → AE is no longer constrained by source availability.
+        dup.inPoint  = dupIn;
+        dup.outPoint = dupOut;
+
+        // 6. Animated glitch mask
         addGlitchMask(dup, dupIn, dupOut, fd, W, H, maskW, maskH);
     }
 
@@ -115,7 +132,7 @@
             times.push(t);
             t += (Math.random() < 0.5 ? 1 : 2) * frameDur;
         }
-        if (times[times.length - 1] < layerOut - frameDur * 0.01) {
+        if (times.length === 0 || times[times.length - 1] < layerOut - frameDur * 0.01) {
             times.push(layerOut);
         }
 
@@ -133,7 +150,7 @@
             maskShape.setValueAtTime(times[j], s);
         }
 
-        // HOLD interpolation on every keyframe → hard jumps, no blending
+        // HOLD on every keyframe → hard jumps, no blending
         for (var k = 1; k <= maskShape.numKeys; k++) {
             maskShape.setInterpolationTypeAtKey(k, KeyframeInterpolationType.HOLD);
         }
