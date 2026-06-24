@@ -43,6 +43,7 @@ if (!(comp instanceof CompItem)) {
 
         // ── 1 + 2 + 3: Duplizieren, links verlängern, rechts abschneiden ────
         var dup = orig.duplicate();
+        dup.moveBefore(orig);    // direkt über dem Original einsortieren
         dup.inPoint  = dupIn;    // N Frames nach links
         dup.outPoint = dupOut;   // endet exakt bei X
 
