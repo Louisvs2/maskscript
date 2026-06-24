@@ -23,6 +23,11 @@ if (!(comp instanceof CompItem)) {
     var fd     = 1 / fps;
     var X      = orig.inPoint;   // Startpunkt des Originalclips
 
+    // Layer-Referenz 2 Positionen über dem Original im Stack (einmalig merken,
+    // bevor Duplikate den Index verschieben).
+    // Alle Duplikate werden vor diesen Layer geschoben → landen 2 über Original.
+    var anchorLayer = (orig.index >= 3) ? comp.layer(orig.index - 2) : null;
+
     var nFramesList = [10, 7, 4];
 
     // Masken-Charakter pro Duplikat:
@@ -43,7 +48,12 @@ if (!(comp instanceof CompItem)) {
 
         // ── 1 + 2 + 3: Duplizieren, links verlängern, rechts abschneiden ────
         var dup = orig.duplicate();
-        dup.moveBefore(orig);    // direkt über dem Original einsortieren
+        // 2 Layer über dem Original einsortieren
+        if (anchorLayer) {
+            dup.moveBefore(anchorLayer);
+        } else {
+            dup.moveToBeginning();
+        }
         dup.inPoint  = dupIn;    // N Frames nach links
         dup.outPoint = dupOut;   // endet exakt bei X
 
