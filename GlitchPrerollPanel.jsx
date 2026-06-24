@@ -2,105 +2,37 @@
 //
 // Installation:
 //   Datei kopieren nach:
+//   Mac:  /Applications/Adobe After Effects 2026/Scripts/ScriptUI Panels/
 //   Win:  ...\Adobe After Effects 2026\Support Files\Scripts\ScriptUI Panels\
-//   Mac:  .../Adobe After Effects 2026/Scripts/ScriptUI Panels/
 //   AE neu starten → Fenster-Menü → GlitchPrerollPanel
 
 (function (thisObj) {
     "use strict";
 
     // ── Defaults ──────────────────────────────────────────────────────────────
-    var DEF_NUM   = 3;
-    var DEF_FR    = [10, 7, 4, 6, 3];
-    var DEF_DIST  = 6;
-    var DEF_FREQ  = 3;
-    var DEF_SIZE  = 10;
+    var DEF_NUM  = 3;
+    var DEF_FR   = [10, 7, 4, 6, 3];
+    var DEF_DIST = 6;
+    var DEF_FREQ = 3;
+    var DEF_SIZE = 10;
 
-    // ── Farbpalette  (0 – 1) ─────────────────────────────────────────────────
+    // ── Farben (0–1) ──────────────────────────────────────────────────────────
     var C = {
-        bg:       [0.051, 0.055, 0.075, 1],   // #0D0E13  deep space
-        card:     [0.110, 0.118, 0.165, 1],   // #1C1E2A  glass card
-        cardEdge: [0.220, 0.231, 0.318, 1],   // #383B51  card rim
-        shine:    [0.200, 0.212, 0.290, 1],   // #333549  top-edge shine
-        accent:   [0.224, 0.502, 0.957, 1],   // #3980F4  Apple blue
-        accentLo: [0.118, 0.373, 0.878, 1],   // #1E5FE0  darker blue
-        white:    [1.000, 1.000, 1.000, 1],
-        txtHi:    [0.918, 0.929, 0.961, 1],   // #EAEdf5  primary text
-        txtMid:   [0.580, 0.600, 0.690, 1],   // #9499B0  secondary text
-        txtLo:    [0.345, 0.361, 0.447, 1],   // #585C72  dim text
-        sep:      [0.180, 0.192, 0.263, 1],   // #2E3143  separator
+        bg:     [0.110, 0.114, 0.153, 1],   // #1C1D27
+        card:   [0.145, 0.149, 0.200, 1],   // #252633
+        accent: [0.224, 0.502, 0.957, 1],   // #3980F4
+        txtHi:  [0.918, 0.922, 0.953, 1],   // #EAEBF3
+        txtMid: [0.580, 0.592, 0.675, 1],   // #9497AC
+        txtLo:  [0.380, 0.388, 0.455, 1],   // #616274
     };
 
-    // ── Farb-Helfer ───────────────────────────────────────────────────────────
-    function bg(el, col) {
+    function setBg(el, col) {
         el.graphics.backgroundColor =
             el.graphics.newBrush(el.graphics.BrushType.SOLID_COLOR, col);
     }
-    function fg(el, col) {
+    function setFg(el, col) {
         el.graphics.foregroundColor =
             el.graphics.newPen(el.graphics.PenType.SOLID_COLOR, col, 1);
-    }
-
-    // ── Glas-Karte (custom onDraw) ────────────────────────────────────────────
-    function glassCard(parent) {
-        var g2 = parent.add("group");
-        g2.orientation   = "column";
-        g2.alignChildren = ["fill", "top"];
-        g2.spacing       = 0;
-        g2.margins       = 0;
-
-        g2.onDraw = function () {
-            var gr = this.graphics;
-            var W  = this.size[0], H = this.size[1];
-
-            // Hintergrund
-            gr.newPath(); gr.rectPath(0, 0, W, H);
-            gr.fillPath(gr.newBrush(gr.BrushType.SOLID_COLOR, C.card));
-
-            // Obere Glanz-Linie
-            gr.newPath(); gr.rectPath(1, 1, W - 2, 2);
-            gr.fillPath(gr.newBrush(gr.BrushType.SOLID_COLOR, C.shine));
-
-            // Rahmen
-            gr.newPath(); gr.rectPath(0.5, 0.5, W - 1, H - 1);
-            gr.strokePath(gr.newPen(gr.PenType.SOLID_COLOR, C.cardEdge, 1));
-        };
-
-        return g2;
-    }
-
-    // ── Abschnitts-Header ─────────────────────────────────────────────────────
-    function sectionHeader(parent, title) {
-        var hdr = parent.add("group");
-        hdr.orientation   = "row";
-        hdr.alignChildren = ["left", "center"];
-        hdr.margins       = [14, 10, 10, 4];
-        hdr.spacing       = 8;
-        bg(hdr, C.card);
-
-        // Akzent-Streifen links
-        var bar = hdr.add("group");
-        bar.preferredSize = [3, 14];
-        bar.onDraw = function () {
-            var gr = this.graphics;
-            var W = this.size[0], H = this.size[1];
-            gr.newPath(); gr.rectPath(0, 0, W, H);
-            gr.fillPath(gr.newBrush(gr.BrushType.SOLID_COLOR, C.accent));
-        };
-
-        var lbl = hdr.add("statictext", undefined, title);
-        fg(lbl, C.txtMid);
-
-        // Trennlinie darunter
-        var sep = parent.add("group");
-        sep.margins = [14, 0, 14, 6];
-        bg(sep, C.card);
-        sep.onDraw = function () {
-            var gr = this.graphics;
-            gr.newPath(); gr.rectPath(0, 0, this.size[0], 1);
-            gr.fillPath(gr.newBrush(gr.BrushType.SOLID_COLOR, C.sep));
-        };
-        sep.preferredSize.height = 1;
     }
 
     // ── Slider-Zeile ─────────────────────────────────────────────────────────
@@ -108,27 +40,26 @@
         var row = parent.add("group");
         row.orientation   = "row";
         row.alignChildren = ["left", "center"];
-        row.spacing       = 8;
-        row.margins       = [14, 3, 14, 3];
-        bg(row, C.card);
+        row.spacing       = 6;
+        row.margins       = [0, 2, 0, 2];
 
         var lbl = row.add("statictext", undefined, label);
-        lbl.preferredSize.width = 158;
-        fg(lbl, C.txtHi);
+        lbl.preferredSize.width = 170;
+        setFg(lbl, C.txtHi);
 
         var sl = row.add("slider", undefined, val, lo, hi);
-        sl.preferredSize.width = 108;
+        sl.preferredSize.width = 100;
 
         var vl = row.add("statictext", undefined, val + unit);
         vl.preferredSize.width = 36;
-        fg(vl, C.accent);
+        setFg(vl, C.accent);
 
         sl.onChanging = function () { vl.text = Math.round(sl.value) + unit; };
 
         return { row: row, slider: sl, valLabel: vl, unit: unit };
     }
 
-    // ── Haupt-UI ──────────────────────────────────────────────────────────────
+    // ── UI aufbauen ───────────────────────────────────────────────────────────
     function buildUI(host) {
         var win = (host instanceof Panel)
             ? host
@@ -136,118 +67,60 @@
 
         win.orientation   = "column";
         win.alignChildren = ["fill", "top"];
-        win.spacing       = 10;
-        win.margins       = 12;
-        bg(win, C.bg);
+        win.spacing       = 8;
+        win.margins       = 10;
+        setBg(win, C.bg);
 
-        // ── Logo-Header ───────────────────────────────────────────────────────
-        var logoBar = win.add("group");
-        logoBar.orientation   = "row";
-        logoBar.alignChildren = ["fill", "center"];
-        logoBar.margins       = [10, 8, 10, 8];
-        logoBar.spacing       = 0;
-        bg(logoBar, C.bg);
+        // ── Header ────────────────────────────────────────────────────────────
+        var hdr = win.add("group");
+        hdr.orientation   = "row";
+        hdr.alignChildren = ["left", "center"];
+        hdr.margins       = [6, 6, 6, 6];
+        hdr.spacing       = 8;
+        setBg(hdr, C.bg);
 
-        // Linke Akzentlinie
-        var logoLine = logoBar.add("group");
-        logoLine.preferredSize = [3, 22];
-        logoLine.onDraw = function () {
-            var gr = this.graphics, W = this.size[0], H = this.size[1];
-            // Gradient simulation: two rects
-            var top = Math.floor(H * 0.5);
-            gr.newPath(); gr.rectPath(0, 0, W, top);
-            gr.fillPath(gr.newBrush(gr.BrushType.SOLID_COLOR, C.accent));
-            gr.newPath(); gr.rectPath(0, top, W, H - top);
-            gr.fillPath(gr.newBrush(gr.BrushType.SOLID_COLOR, C.accentLo));
-        };
+        var hTitle = hdr.add("statictext", undefined, "Glitch Preroll");
+        setFg(hTitle, C.accent);
 
-        var logoGrp = logoBar.add("group");
-        logoGrp.orientation   = "column";
-        logoGrp.alignChildren = ["left", "top"];
-        logoGrp.spacing       = 1;
-        logoGrp.margins       = [8, 0, 0, 0];
-        bg(logoGrp, C.bg);
+        var hSub = hdr.add("statictext", undefined, "— After Effects 2026");
+        setFg(hSub, C.txtLo);
 
-        var title = logoGrp.add("statictext", undefined, "Glitch Preroll");
-        fg(title, C.txtHi);
+        // ── Sektion: Layer ────────────────────────────────────────────────────
+        var secL = win.add("panel", undefined, "Layer-Einstellungen");
+        secL.orientation   = "column";
+        secL.alignChildren = ["fill", "top"];
+        secL.spacing       = 6;
+        secL.margins       = [10, 16, 10, 10];
+        setBg(secL, C.card);
+        setFg(secL, C.txtMid);
 
-        var sub = logoGrp.add("statictext", undefined, "After Effects 2026");
-        fg(sub, C.txtLo);
-
-        // Trennlinie unter Header
-        var topSep = win.add("group");
-        topSep.margins = [0, 0, 0, 0];
-        bg(topSep, C.bg);
-        topSep.onDraw = function () {
-            var gr = this.graphics;
-            gr.newPath(); gr.rectPath(0, 0, this.size[0], 1);
-            gr.fillPath(gr.newBrush(gr.BrushType.SOLID_COLOR, C.sep));
-        };
-        topSep.preferredSize.height = 1;
-
-        // ── Karte: Layer ──────────────────────────────────────────────────────
-        var cardL = glassCard(win);
-        sectionHeader(cardL, "LAYER SETTINGS");
-
-        var ctrlNum = sliderRow(cardL, "Number of Layers", DEF_NUM, 1, 5, "");
+        var ctrlNum = sliderRow(secL, "Anzahl Layer", DEF_NUM, 1, 5, "");
 
         var frameRows = [], frameSliders = [], frameLabels = [];
         for (var fi = 0; fi < 5; fi++) {
-            var fr = sliderRow(cardL, "Layer " + (fi + 1) + "  –  Frames",
+            var fr = sliderRow(secL, "Layer " + (fi + 1) + "  –  Frames",
                                DEF_FR[fi], 1, 60, " f");
             frameRows.push(fr.row);
             frameSliders.push(fr.slider);
             frameLabels.push(fr.valLabel);
         }
 
-        // Abstand unten in der Karte
-        var padL = cardL.add("group"); padL.preferredSize.height = 6;
-        bg(padL, C.card);
+        // ── Sektion: Masken ───────────────────────────────────────────────────
+        var secM = win.add("panel", undefined, "Masken-Einstellungen");
+        secM.orientation   = "column";
+        secM.alignChildren = ["fill", "top"];
+        secM.spacing       = 6;
+        secM.margins       = [10, 16, 10, 10];
+        setBg(secM, C.card);
+        setFg(secM, C.txtMid);
 
-        // ── Karte: Masken ─────────────────────────────────────────────────────
-        var cardM = glassCard(win);
-        sectionHeader(cardM, "MASK SETTINGS");
-
-        var ctrlDist = sliderRow(cardM, "Jump Distance",       DEF_DIST, 1, 40, " %");
-        var ctrlFreq = sliderRow(cardM, "Jump Every N Frames", DEF_FREQ, 1, 15, " f");
-        var ctrlSize = sliderRow(cardM, "Mask Size",           DEF_SIZE, 1, 60, " %");
-
-        var padM = cardM.add("group"); padM.preferredSize.height = 6;
-        bg(padM, C.card);
+        var ctrlDist = sliderRow(secM, "Sprungweite",          DEF_DIST, 1, 40, " %");
+        var ctrlFreq = sliderRow(secM, "Sprung alle N Frames", DEF_FREQ, 1, 15, " f");
+        var ctrlSize = sliderRow(secM, "Maskengrösse",         DEF_SIZE, 1, 60, " %");
 
         // ── Button ────────────────────────────────────────────────────────────
-        var btnWrap = win.add("group");
-        btnWrap.orientation   = "column";
-        btnWrap.alignChildren = ["fill", "center"];
-        btnWrap.margins       = [0, 0, 0, 4];
-        bg(btnWrap, C.bg);
-
-        var btn = btnWrap.add("button", undefined, "Create Glitch Preroll");
-        btn.preferredSize.height = 34;
-
-        // Custom-Draw: blauer Glas-Button
-        btn.onDraw = function () {
-            var gr = this.graphics;
-            var W = this.size[0], H = this.size[1];
-
-            // Blaues Fundament
-            gr.newPath(); gr.rectPath(0, 0, W, H);
-            gr.fillPath(gr.newBrush(gr.BrushType.SOLID_COLOR, C.accent));
-
-            // Obere Hälfte etwas heller (Glas-Shimmer)
-            gr.newPath(); gr.rectPath(1, 1, W - 2, Math.floor(H / 2));
-            gr.fillPath(gr.newBrush(gr.BrushType.SOLID_COLOR, C.accentLo));
-
-            // 1px Rim
-            gr.newPath(); gr.rectPath(0.5, 0.5, W - 1, H - 1);
-            gr.strokePath(gr.newPen(gr.PenType.SOLID_COLOR, C.accent, 1));
-
-            // Text zentriert
-            var txt = "Create Glitch Preroll";
-            var pen = gr.newPen(gr.PenType.SOLID_COLOR, C.white, 1);
-            var ms  = gr.measureString(txt, gr.font, W);
-            gr.drawString(txt, pen, (W - ms[0]) / 2, (H - ms[1]) / 2);
-        };
+        var btn = win.add("button", undefined, "Create Glitch Preroll");
+        btn.preferredSize.height = 32;
 
         // ── Events ────────────────────────────────────────────────────────────
         function refreshRows() {
@@ -255,7 +128,7 @@
             ctrlNum.valLabel.text = n;
             for (var j = 0; j < 5; j++) {
                 frameRows[j].enabled = (j < n);
-                fg(frameLabels[j], j < n ? C.accent : C.txtLo);
+                setFg(frameLabels[j], j < n ? C.accent : C.txtLo);
             }
         }
         ctrlNum.slider.onChanging = refreshRows;
@@ -305,7 +178,7 @@
     }
 
     function applyMask(layer, layerIn, layerOut, fd, jumpDist, jumpFreq, sizePct) {
-        var w = layer.width,  h = layer.height;
+        var w = layer.width, h = layer.height;
         var base  = Math.sqrt(sizePct);
         var maskW = w * base * (0.5 + Math.random() * 1.8);
         var maskH = h * base * (0.3 + Math.random() * 1.2);
@@ -321,7 +194,7 @@
             var cx = baseCX + (Math.random() - 0.5) * w * jumpDist;
             var cy = baseCY + (Math.random() - 0.5) * h * jumpDist;
             var rs = 0.5 + Math.random();
-            var rW = maskW * rs,  rH = maskH * rs;
+            var rW = maskW * rs, rH = maskH * rs;
 
             var s = new Shape();
             s.closed      = true;
