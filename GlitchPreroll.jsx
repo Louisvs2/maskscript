@@ -17,28 +17,26 @@
 
     var sel = comp.selectedLayers;
     if (sel.length !== 1) {
-        alert("Bitte genau EINEN Layer auswählen (aktuell: " + sel.length + ").");
+        alert("Bitte genau EINEN Layer auswaehlen (aktuell: " + sel.length + ").");
         return;
     }
 
     var orig = sel[0];
 
     if (orig.stretch === 0) {
-        alert("Layer hat Time-Stretch 0 % – nicht unterstützt.");
+        alert("Layer hat Time-Stretch 0 % - nicht unterstuetzt.");
         return;
     }
 
     // ── basics ────────────────────────────────────────────────────────────────
     var fps           = comp.frameRate;
-    var fd            = 1 / fps;           // one frame in seconds
-    var X             = orig.inPoint;      // composition time of layer start
+    var fd            = 1 / fps;
+    var X             = orig.inPoint;
     var W             = comp.width;
     var H             = comp.height;
-    var stretchFactor = orig.stretch / 100; // negative = reversed clip
+    var stretchFactor = orig.stretch / 100;
 
-    // Source time that appears at composition time X in the original layer.
-    // If the original already uses Time Remapping we sample it directly,
-    // otherwise we use the standard linear formula.
+    // Source time visible at composition time X.
     var srcAtX;
     if (orig.timeRemapEnabled) {
         srcAtX = orig.timeRemap.valueAtTime(X, false);
@@ -46,15 +44,15 @@
         srcAtX = (X - orig.startTime) / stretchFactor;
     }
 
-    // ── mask geometry (~10 % of frame area, aspect-correct rectangle) ─────────
+    // ── mask geometry (~10 % of frame area) ──────────────────────────────────
     var maskArea = 0.10 * W * H;
-    var maskW    = Math.sqrt(maskArea * (W / H));   // width  in pixels
-    var maskH    = Math.sqrt(maskArea / (W / H));   // height in pixels
+    var maskW    = Math.sqrt(maskArea * (W / H));
+    var maskH    = Math.sqrt(maskArea / (W / H));
 
     // ── create duplicates ─────────────────────────────────────────────────────
     app.beginUndoGroup("Glitch Preroll");
 
-    var nFramesList = [10, 7, 4]; // longest first → stacked correctly
+    var nFramesList = [10, 7, 4];
 
     for (var i = 0; i < nFramesList.length; i++) {
         var nF     = nFramesList[i];
@@ -62,77 +60,59 @@
         var dupIn  = X - dupDur;
         var dupOut = X;
 
-        // Duplicate is placed directly above the original by AE
         var dup = orig.duplicate();
 
-        // ── Time Remapping ────────────────────────────────────────────────────
-        // Enables free placement of any source frame at any comp time and
-        // guarantees a freeze hold when source material is exhausted.
+        // ── Step 1: set timing BEFORE enabling Time Remapping ─────────────────
+        // AE allows inPoint/outPoint to be set freely even beyond source bounds.
+        // This must happen first so that when we enable timeRemap AE creates
+        // its automatic keyframes exactly at dupIn and dupOut.
+        dup.outPoint = dupOut;
+        dup.inPoint  = dupIn;
+
+        // ── Step 2: enable Time Remapping ─────────────────────────────────────
+        // AE now creates exactly two keyframes:
+        //   key 1  at dupIn   with value = source time at dupIn
+        //   key 2  at dupOut  with value = source time at dupOut
         dup.timeRemapEnabled = true;
 
-        var tr = dup.timeRemap; // "ADBE Time Remapping"
+        // Always re-fetch the property reference after structural changes.
+        var tr = dup.property("ADBE Time Remapping");
 
-        // Remove the two auto-generated keyframes
-        while (tr.numKeys > 0) {
-            tr.removeKey(1);
-        }
-
-        // Set layer bounds first so keyframes fall within the visible range
-        dup.inPoint  = dupIn;
-        dup.outPoint = dupOut;
-
-        // Source time that would appear at dupIn if we preserve original stretch
-        // Formula:  src(t) = srcAtX + (t – X) / stretchFactor
+        // ── Step 3: correct key values ────────────────────────────────────────
+        // The auto-generated values may reference negative source time (when
+        // the layer hasn't been on screen long enough before X).  We clamp
+        // key 1 to 0 and freeze it if necessary.
         var srcAtDupIn = srcAtX + (dupIn - X) / stretchFactor;
+        var srcMin     = 0.0;
 
-        var srcMin = 0.0; // earliest valid source time (source starts at 0)
+        var k1time = tr.keyTime(1);
+        var k2time = tr.keyTime(tr.numKeys); // last key = dupOut (or dupOut+1f)
 
-        // Detect whether source material is available for the full preroll
-        var normalStart = srcAtDupIn;
-        var needFreeze  = (stretchFactor > 0) && (srcAtDupIn < srcMin);
-
-        if (needFreeze) {
-            // Comp time at which source time srcMin naturally falls
-            var ctSrcMin = orig.startTime + srcMin * stretchFactor;
-            if (ctSrcMin < dupIn) {
-                // Source already started before our window – clamp the value only
-                tr.setValueAtTime(dupIn,  srcMin);
-                tr.setValueAtTime(dupOut, srcAtX);
-            } else {
-                // Freeze at srcMin from dupIn until ctSrcMin, then play normally
-                tr.setValueAtTime(dupIn,     srcMin);
-                tr.setValueAtTime(ctSrcMin,  srcMin);
-                tr.setValueAtTime(dupOut,    srcAtX);
-
-                // First key: HOLD (freeze frame)
-                tr.setInterpolationTypeAtKey(1, KeyframeInterpolationType.HOLD);
-                // Second key transitions to LINEAR playback
-                tr.setInterpolationTypeAtKey(2, KeyframeInterpolationType.LINEAR);
-            }
+        if (stretchFactor > 0 && srcAtDupIn < srcMin) {
+            // Not enough source before X: freeze at first frame.
+            tr.setValueAtTime(k1time, srcMin);
+            tr.setInterpolationTypeAtKey(1, KeyframeInterpolationType.HOLD);
+            tr.setValueAtTime(k2time, srcAtX);
         } else {
-            // Sufficient source material – simple linear remap
-            tr.setValueAtTime(dupIn,  normalStart);
-            tr.setValueAtTime(dupOut, srcAtX);
+            // Enough source material: ensure linear playback to srcAtX.
+            tr.setValueAtTime(k1time, srcAtDupIn);
+            tr.setValueAtTime(k2time, srcAtX);
         }
 
-        // ── Animated glitch mask ──────────────────────────────────────────────
+        // ── Step 4: animated glitch mask ─────────────────────────────────────
         addGlitchMask(dup, dupIn, dupOut, fd, W, H, maskW, maskH);
     }
 
     app.endUndoGroup();
 
-    // ── Animated glitch mask helper ───────────────────────────────────────────
-    //
-    // Adds a hard-edged rectangle mask that jumps to a new random position
-    // (near composition centre) every one or two frames using HOLD keyframes.
+    // ── helper ────────────────────────────────────────────────────────────────
     function addGlitchMask(layer, layerIn, layerOut, frameDur,
                             cW, cH, mW, mH) {
 
-        var masks = layer.property("ADBE Mask Parade");
-        var mask  = masks.addProperty("ADBE Mask Atom");
+        var mask = layer.property("ADBE Mask Parade").addProperty("ADBE Mask Atom");
 
         mask.maskMode      = MaskMode.ADD;
-        mask.maskFeather   = [0, 0];   // hard edges, no feather
+        mask.maskFeather   = [0, 0];
         mask.maskOpacity   = 100;
         mask.maskExpansion = 0;
         mask.inverted      = false;
@@ -141,40 +121,36 @@
 
         var cx        = cW / 2;
         var cy        = cH / 2;
-        var maxOffset = Math.min(cW, cH) * 0.20; // ±20 % of short side
+        var maxOffset = Math.min(cW, cH) * 0.20;
 
-        // Build list of keyframe times (every 1 or 2 frames, randomised)
+        // Keyframe times: every 1-2 frames, randomised
         var times = [];
         var t     = layerIn;
         while (t <= layerOut + frameDur * 0.01) {
             times.push(t);
             t += (Math.random() < 0.5 ? 1 : 2) * frameDur;
         }
-        // Guarantee a keyframe exactly at the layer's outPoint
         if (times[times.length - 1] < layerOut - frameDur * 0.01) {
             times.push(layerOut);
         }
 
-        // Add a HOLD keyframe with a new random rectangle position at each time
         for (var j = 0; j < times.length; j++) {
             var rx = cx + (Math.random() - 0.5) * 2 * maxOffset;
             var ry = cy + (Math.random() - 0.5) * 2 * maxOffset;
 
-            var shape        = new Shape();
-            shape.closed     = true;
-            // Vertices in comp-space pixels (top-left, top-right, bottom-right, bottom-left)
-            shape.vertices   = [[rx - mW / 2, ry - mH / 2],
-                                 [rx + mW / 2, ry - mH / 2],
-                                 [rx + mW / 2, ry + mH / 2],
-                                 [rx - mW / 2, ry + mH / 2]];
-            // Zero tangents → straight lines, 90° corners, no rounding
+            var shape         = new Shape();
+            shape.closed      = true;
+            shape.vertices    = [[rx - mW / 2, ry - mH / 2],
+                                  [rx + mW / 2, ry - mH / 2],
+                                  [rx + mW / 2, ry + mH / 2],
+                                  [rx - mW / 2, ry + mH / 2]];
             shape.inTangents  = [[0, 0], [0, 0], [0, 0], [0, 0]];
             shape.outTangents = [[0, 0], [0, 0], [0, 0], [0, 0]];
 
             maskShape.setValueAtTime(times[j], shape);
         }
 
-        // Switch every keyframe to HOLD – mask jumps, never interpolates
+        // HOLD on every mask-shape keyframe – hard jumps, no interpolation
         for (var k = 1; k <= maskShape.numKeys; k++) {
             maskShape.setInterpolationTypeAtKey(k, KeyframeInterpolationType.HOLD);
         }
