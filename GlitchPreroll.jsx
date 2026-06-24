@@ -30,16 +30,16 @@ if (!(comp instanceof CompItem)) {
 
     var nFramesList = [10, 7, 4];
 
-    // Masken-Charakter pro Duplikat:
-    //   offsetX  – horizontale Verschiebung relativ zur Mitte (0 = Mitte, -0.25 = links)
-    //   offsetY  – vertikale Verschiebung relativ zur Mitte  (0 = Mitte, -0.25 = oben)
-    //   scaleW   – Breiten-Faktor  (1 = normal, 1.8 = breiter/länger)
-    //   scaleH   – Höhen-Faktor
-    var maskConfigs = [
-        { offsetX: -0.25, offsetY:  0.00, scaleW: 1.0, scaleH: 1.0 },  // Dup 1 (10f): links
-        { offsetX:  0.00, offsetY:  0.00, scaleW: 1.8, scaleH: 0.5 },  // Dup 2 ( 7f): breiter/länger
-        { offsetX:  0.00, offsetY: -0.25, scaleW: 1.0, scaleH: 1.0 }   // Dup 3 ( 4f): höher
-    ];
+    // Masken-Charakter: jedes Mal zufällig neu generiert
+    var maskConfigs = [];
+    for (var c = 0; c < 3; c++) {
+        maskConfigs.push({
+            offsetX: (Math.random() - 0.5) * 0.5,          // -0.25 … +0.25 der Breite
+            offsetY: (Math.random() - 0.5) * 0.5,          // -0.25 … +0.25 der Höhe
+            scaleW:  0.5 + Math.random() * 1.8,             // 0.5× … 2.3× Basisbreite
+            scaleH:  0.3 + Math.random() * 1.2              // 0.3× … 1.5× Basishöhe
+        });
+    }
 
     for (var i = 0; i < nFramesList.length; i++) {
         var nF     = nFramesList[i];
